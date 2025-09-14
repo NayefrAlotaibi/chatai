@@ -25,9 +25,15 @@ import { createDocument } from '@/lib/ai/tools/create-document';
 import { updateDocument } from '@/lib/ai/tools/update-document';
 import { requestSuggestions } from '@/lib/ai/tools/request-suggestions';
 import { getWeather } from '@/lib/ai/tools/get-weather';
+import { processReceipt } from '@/lib/ai/tools/process-receipt';
+import { queryReceipts } from '@/lib/ai/tools/query-receipts';
+import { queryBankTransactions } from '@/lib/ai/tools/query-bank-transactions';
+import { searchWeb } from '@/lib/ai/tools/search-web';
+import { runWorkflow } from '@/lib/ai/tools/run-workflow';
+import { categorizeTransaction } from '@/lib/ai/tools/categorize-transaction';
 import { isProductionEnvironment } from '@/lib/constants';
 import { myProvider } from '@/lib/ai/providers';
-import { entitlementsByUserType } from '@/lib/ai/entitlements';
+// import { entitlementsByUserType } from '@/lib/ai/entitlements';
 import { postRequestBodySchema, type PostRequestBody } from './schema';
 import { geolocation } from '@vercel/functions';
 import {
@@ -93,16 +99,15 @@ export async function POST(request: Request) {
       return new ChatSDKError('unauthorized:chat').toResponse();
     }
 
-    const userType: UserType = session.user.type;
-
-    const messageCount = await getMessageCountByUserId({
-      id: session.user.id,
-      differenceInHours: 24,
-    });
-
-    if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
-      return new ChatSDKError('rate_limit:chat').toResponse();
-    }
+    // Disable daily message rate limit
+    // const userType: UserType = session.user.type;
+    // const messageCount = await getMessageCountByUserId({
+    //   id: session.user.id,
+    //   differenceInHours: 24,
+    // });
+    // if (messageCount > entitlementsByUserType[userType].maxMessagesPerDay) {
+    //   return new ChatSDKError('rate_limit:chat').toResponse();
+    // }
 
     const chat = await getChatById({ id });
 
@@ -153,6 +158,13 @@ export async function POST(request: Request) {
 
     let finalUsage: LanguageModelUsage | undefined;
 
+    // Try to extract the most recent image URL from the user's message
+    const imageParts = (message.parts || []).filter(
+      // biome-ignore lint/suspicious/noExplicitAny: message parts are heterogeneous
+      (p: any) => p.type === 'file' && typeof p.url === 'string' && p.mediaType?.startsWith('image/'),
+    ) as Array<any>;
+    const latestImageUrl = imageParts.length > 0 ? imageParts[imageParts.length - 1].url : undefined;
+
     const stream = createUIMessageStream({
       execute: ({ writer: dataStream }) => {
         const result = streamText({
@@ -160,15 +172,18 @@ export async function POST(request: Request) {
           system: systemPrompt({ selectedChatModel, requestHints }),
           messages: convertToModelMessages(uiMessages),
           stopWhen: stepCountIs(5),
-          experimental_activeTools:
-            selectedChatModel === 'chat-model-reasoning'
-              ? []
-              : [
-                  'getWeather',
-                  'createDocument',
-                  'updateDocument',
-                  'requestSuggestions',
-                ],
+          experimental_activeTools: [
+            'getWeather',
+            'createDocument',
+            'updateDocument',
+            'requestSuggestions',
+            'processReceipt',
+            'queryReceipts',
+            'queryBankTransactions',
+            'searchWeb',
+            'runWorkflow',
+            'categorizeTransaction',
+          ],
           experimental_transform: smoothStream({ chunking: 'word' }),
           tools: {
             getWeather,
@@ -178,6 +193,12 @@ export async function POST(request: Request) {
               session,
               dataStream,
             }),
+            processReceipt: processReceipt({ session, dataStream, imageUrl: latestImageUrl }),
+            queryReceipts: queryReceipts({ session, dataStream }),
+            queryBankTransactions: queryBankTransactions({ session, dataStream }),
+            searchWeb: searchWeb({ session, dataStream }),
+            runWorkflow: runWorkflow({ session, dataStream, defaultImageUrl: latestImageUrl }),
+            categorizeTransaction: categorizeTransaction({ session, dataStream }),
           },
           experimental_telemetry: {
             isEnabled: isProductionEnvironment,
@@ -196,6 +217,12 @@ export async function POST(request: Request) {
             sendReasoning: true,
           }),
         );
+
+        // Minimal: auto-run the receipt enrichment workflow when an image is attached
+        if (latestImageUrl) {
+          const wf = runWorkflow({ session, dataStream, defaultImageUrl: latestImageUrl });
+          void wf.execute({ name: 'receipt_enrichment', params: {} as any });
+        }
       },
       generateId: generateUUID,
       onFinish: async ({ messages }) => {

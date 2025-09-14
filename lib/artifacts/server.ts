@@ -1,7 +1,8 @@
 import { codeDocumentHandler } from '@/artifacts/code/server';
 import { sheetDocumentHandler } from '@/artifacts/sheet/server';
 import { textDocumentHandler } from '@/artifacts/text/server';
-import type { ArtifactKind } from '@/components/artifact';
+// Define the subset of kinds that are persisted in the DB Document.kind
+export type DocumentKind = 'text' | 'code' | 'sheet' | 'image';
 import type { Document } from '../db/schema';
 import { saveDocument } from '../db/queries';
 import type { Session } from 'next-auth';
@@ -11,7 +12,7 @@ import type { ChatMessage } from '../types';
 export interface SaveDocumentProps {
   id: string;
   title: string;
-  kind: ArtifactKind;
+  kind: DocumentKind;
   content: string;
   userId: string;
 }
@@ -30,13 +31,13 @@ export interface UpdateDocumentCallbackProps {
   session: Session;
 }
 
-export interface DocumentHandler<T = ArtifactKind> {
+export interface DocumentHandler<T = DocumentKind> {
   kind: T;
   onCreateDocument: (args: CreateDocumentCallbackProps) => Promise<void>;
   onUpdateDocument: (args: UpdateDocumentCallbackProps) => Promise<void>;
 }
 
-export function createDocumentHandler<T extends ArtifactKind>(config: {
+export function createDocumentHandler<T extends DocumentKind>(config: {
   kind: T;
   onCreateDocument: (params: CreateDocumentCallbackProps) => Promise<string>;
   onUpdateDocument: (params: UpdateDocumentCallbackProps) => Promise<string>;
@@ -95,4 +96,4 @@ export const documentHandlersByArtifactKind: Array<DocumentHandler> = [
   sheetDocumentHandler,
 ];
 
-export const artifactKinds = ['text', 'code', 'sheet'] as const;
+export const artifactKinds = ['text', 'code', 'sheet'] as const satisfies readonly DocumentKind[];

@@ -16,6 +16,7 @@ import {
 import { MessageActions } from './message-actions';
 import { PreviewAttachment } from './preview-attachment';
 import { Weather } from './weather';
+import { Receipt } from './receipt';
 import equal from 'fast-deep-equal';
 import { cn, sanitizeText } from '@/lib/utils';
 import { MessageEditor } from './message-editor';
@@ -259,6 +260,64 @@ const PurePreviewMessage = ({
                               result={part.output}
                               isReadonly={isReadonly}
                             />
+                          )
+                        }
+                        errorText={undefined}
+                      />
+                    )}
+                  </ToolContent>
+                </Tool>
+              );
+            }
+
+            if (type === 'tool-processReceipt') {
+              const { toolCallId, state } = part;
+
+              return (
+                <Tool key={toolCallId} defaultOpen={true}>
+                  <ToolHeader type="tool-processReceipt" state={state} />
+                  <ToolContent>
+                    {state === 'input-available' && <ToolInput input={part.input} />}
+                    {state === 'output-available' && (
+                      <ToolOutput
+                        output={<Receipt data={part.output?.extractedData || {}} />}
+                        errorText={undefined}
+                      />
+                    )}
+                  </ToolContent>
+                </Tool>
+              );
+            }
+
+            if (type === 'tool-queryReceipts') {
+              const { toolCallId, state } = part;
+
+              return (
+                <Tool key={toolCallId} defaultOpen={true}>
+                  <ToolHeader type="tool-queryReceipts" state={state} />
+                  <ToolContent>
+                    {state === 'input-available' && <ToolInput input={part.input} />}
+                    {state === 'output-available' && (
+                      <ToolOutput
+                        output={
+                          part.output?.results?.type === 'detailed_receipt' ? (
+                            <Receipt
+                              data={{
+                                ...part.output.results.receipt,
+                                items: part.output.results.items,
+                              }}
+                            />
+                          ) : part.output?.results?.featuredReceipt ? (
+                            <Receipt
+                              data={{
+                                ...part.output.results.featuredReceipt.receipt,
+                                items: part.output.results.featuredReceipt.items,
+                              }}
+                            />
+                          ) : (
+                            <div className="text-sm">
+                              {part.output?.response || 'Query completed.'}
+                            </div>
                           )
                         }
                         errorText={undefined}

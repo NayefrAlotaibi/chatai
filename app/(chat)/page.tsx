@@ -6,6 +6,9 @@ import { generateUUID } from '@/lib/utils';
 import { DataStreamHandler } from '@/components/data-stream-handler';
 import { auth } from '../(auth)/auth';
 import { redirect } from 'next/navigation';
+import { FloatingModeToggle } from '@/components/floating-mode-toggle';
+import { DashboardOverlay } from '@/components/dashboard-overlay';
+import { UIModeGate } from '@/components/ui/ui-mode-gate';
 
 export default async function Page() {
   const session = await auth();
@@ -22,34 +25,42 @@ export default async function Page() {
   if (!modelIdFromCookie) {
     return (
       <>
-        <Chat
-          key={id}
-          id={id}
-          initialMessages={[]}
-          initialChatModel={DEFAULT_CHAT_MODEL}
-          initialVisibilityType="private"
-          isReadonly={false}
-          session={session}
-          autoResume={false}
-        />
-        <DataStreamHandler />
+        <UIModeGate>
+          <Chat
+            key={id}
+            id={id}
+            initialMessages={[]}
+            initialChatModel={DEFAULT_CHAT_MODEL}
+            initialVisibilityType="private"
+            isReadonly={false}
+            session={session}
+            autoResume={false}
+          />
+          <DashboardOverlay />
+          <FloatingModeToggle />
+          <DataStreamHandler />
+        </UIModeGate>
       </>
     );
   }
 
   return (
     <>
-      <Chat
-        key={id}
-        id={id}
-        initialMessages={[]}
-        initialChatModel={modelIdFromCookie.value}
-        initialVisibilityType="private"
-        isReadonly={false}
-        session={session}
-        autoResume={false}
-      />
-      <DataStreamHandler />
+      <UIModeGate>
+        <Chat
+          key={id}
+          id={id}
+          initialMessages={[]}
+          initialChatModel={modelIdFromCookie.value}
+          initialVisibilityType="private"
+          isReadonly={false}
+          session={session}
+          autoResume={false}
+        />
+        <DashboardOverlay />
+        <FloatingModeToggle />
+        <DataStreamHandler />
+      </UIModeGate>
     </>
   );
 }

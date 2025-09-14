@@ -17,10 +17,13 @@ import {
 } from '@/components/ui/sidebar';
 import Link from 'next/link';
 import { Tooltip, TooltipContent, TooltipTrigger } from './ui/tooltip';
+import { useUIMode } from './ui/ui-mode';
+import { SidebarGroup, SidebarGroupContent, SidebarMenuItem } from './ui/sidebar';
 
 export function AppSidebar({ user }: { user: User | undefined }) {
   const router = useRouter();
   const { setOpenMobile } = useSidebar();
+  const { mode, setMode, setView } = useUIMode();
 
   return (
     <Sidebar className="group-data-[side=left]:border-r-0">
@@ -61,9 +64,65 @@ export function AppSidebar({ user }: { user: User | undefined }) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <SidebarHistory user={user} />
+        {mode === 'chat' ? (
+          <SidebarHistory user={user} />
+        ) : (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <button
+                    className="flex w-full items-center rounded-md px-2 py-1 text-left hover:bg-sidebar-accent/50"
+                    onClick={() => {
+                      setView('overview' as any);
+                      setOpenMobile(false);
+                    }}
+                  >
+                    Dashboard
+                  </button>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <button
+                    className="flex w-full items-center rounded-md px-2 py-1 text-left hover:bg-sidebar-accent/50"
+                    onClick={() => {
+                      setView('receipts');
+                      setOpenMobile(false);
+                    }}
+                  >
+                    Receipts
+                  </button>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <button
+                    className="flex w-full items-center rounded-md px-2 py-1 text-left hover:bg-sidebar-accent/50"
+                    onClick={() => {
+                      setView('bank' as any);
+                      setOpenMobile(false);
+                    }}
+                  >
+                    Bank Statement
+                  </button>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
-      <SidebarFooter>{user && <SidebarUserNav user={user} />}</SidebarFooter>
+      <SidebarFooter>
+        {user ? (
+          <SidebarUserNav user={user} />
+        ) : (
+          <Button
+            variant="default"
+            className="w-full"
+            onClick={() => {
+              router.push('/api/auth/guest');
+            }}
+          >
+            Continue as Guest
+          </Button>
+        )}
+      </SidebarFooter>
     </Sidebar>
   );
 }

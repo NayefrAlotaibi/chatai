@@ -57,6 +57,13 @@
       "when": 1757362773211,
       "tag": "0007_flowery_ben_parker",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1757866587543,
+      "tag": "0008_faulty_rafael_vega",
+      "breakpoints": true
     }
   ]
 }

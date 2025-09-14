@@ -36,6 +36,11 @@ export function DataStreamHandler() {
         }
 
         switch (delta.type) {
+          case 'data-step-start':
+          case 'data-step-success':
+          case 'data-step-error':
+            // Keep artifact visible and streaming; UI components may read these from dataStream context
+            return { ...draftArtifact, status: 'streaming', isVisible: true };
           case 'data-id':
             return {
               ...draftArtifact,

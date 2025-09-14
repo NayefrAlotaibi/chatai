@@ -21,6 +21,7 @@ import { useChatVisibility } from '@/hooks/use-chat-visibility';
 import { useAutoResume } from '@/hooks/use-auto-resume';
 import { ChatSDKError } from '@/lib/errors';
 import type { Attachment, ChatMessage } from '@/lib/types';
+import { useUIMode } from './ui/ui-mode';
 import { useDataStream } from './data-stream-provider';
 import {
   AlertDialog,
@@ -52,6 +53,7 @@ export function Chat({
   autoResume: boolean;
   initialLastContext?: LanguageModelUsage;
 }) {
+  const { mode } = useUIMode();
   const { visibilityType } = useChatVisibility({
     chatId: id,
     initialVisibilityType,
@@ -151,6 +153,10 @@ export function Chat({
     resumeStream,
     setMessages,
   });
+
+  if (mode !== 'chat') {
+    return null;
+  }
 
   return (
     <>

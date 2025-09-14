@@ -3,7 +3,11 @@ import type { getWeather } from './ai/tools/get-weather';
 import type { createDocument } from './ai/tools/create-document';
 import type { updateDocument } from './ai/tools/update-document';
 import type { requestSuggestions } from './ai/tools/request-suggestions';
+import type { processReceipt } from './ai/tools/process-receipt';
+import type { queryReceipts } from './ai/tools/query-receipts';
 import type { InferUITool, LanguageModelUsage, UIMessage } from 'ai';
+import type { runWorkflow } from './ai/tools/run-workflow';
+import type { categorizeTransaction } from './ai/tools/categorize-transaction';
 
 import type { ArtifactKind } from '@/components/artifact';
 import type { Suggestion } from './db/schema';
@@ -22,12 +26,18 @@ type updateDocumentTool = InferUITool<ReturnType<typeof updateDocument>>;
 type requestSuggestionsTool = InferUITool<
   ReturnType<typeof requestSuggestions>
 >;
+type processReceiptTool = InferUITool<ReturnType<typeof processReceipt>>;
+type queryReceiptsTool = InferUITool<ReturnType<typeof queryReceipts>>;
 
 export type ChatTools = {
   getWeather: weatherTool;
   createDocument: createDocumentTool;
   updateDocument: updateDocumentTool;
   requestSuggestions: requestSuggestionsTool;
+  processReceipt: processReceiptTool;
+  queryReceipts: queryReceiptsTool;
+  runWorkflow: InferUITool<ReturnType<typeof runWorkflow>>;
+  categorizeTransaction: InferUITool<ReturnType<typeof categorizeTransaction>>;
 };
 
 export type CustomUIDataTypes = {
@@ -40,6 +50,10 @@ export type CustomUIDataTypes = {
   id: string;
   title: string;
   kind: ArtifactKind;
+  receipt: any;
+  'step-start': { step: string; info?: any };
+  'step-success': { step: string; result?: any };
+  'step-error': { step: string; error: string };
   clear: null;
   finish: null;
   usage: LanguageModelUsage;

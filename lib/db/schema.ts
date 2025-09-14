@@ -10,6 +10,11 @@ import {
   primaryKey,
   foreignKey,
   boolean,
+  decimal,
+  date,
+  time,
+  integer,
+  index,
 } from 'drizzle-orm/pg-core';
 import type { LanguageModelV2Usage } from '@ai-sdk/provider';
 
@@ -171,3 +176,58 @@ export const stream = pgTable(
 );
 
 export type Stream = InferSelectModel<typeof stream>;
+
+export const receipt = pgTable(
+  'Receipt',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    userId: uuid('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    merchantName: text('merchantName').notNull(),
+    merchantAddress: text('merchantAddress'),
+    receiptDate: date('receiptDate').notNull(),
+    receiptTime: time('receiptTime'),
+    receiptNumber: text('receiptNumber'),
+    subtotal: decimal('subtotal', { precision: 10, scale: 2 }),
+    tax: decimal('tax', { precision: 10, scale: 2 }),
+    tip: decimal('tip', { precision: 10, scale: 2 }),
+    total: decimal('total', { precision: 10, scale: 2 }).notNull(),
+    paymentMethod: text('paymentMethod'),
+    currency: text('currency').default('USD'),
+    imageUrl: text('imageUrl'),
+    originalImageUrl: text('originalImageUrl'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    userIdIdx: index('Receipt_userId_idx').on(table.userId),
+    receiptDateIdx: index('Receipt_receiptDate_idx').on(table.receiptDate),
+    merchantNameIdx: index('Receipt_merchantName_idx').on(table.merchantName),
+  }),
+);
+
+export type Receipt = InferSelectModel<typeof receipt>;
+
+export const receiptItem = pgTable(
+  'ReceiptItem',
+  {
+    id: uuid('id').primaryKey().notNull().defaultRandom(),
+    receiptId: uuid('receiptId')
+      .notNull()
+      .references(() => receipt.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    quantity: integer('quantity').default(1),
+    unitPrice: decimal('unitPrice', { precision: 10, scale: 2 }),
+    totalPrice: decimal('totalPrice', { precision: 10, scale: 2 }).notNull(),
+    category: text('category'),
+    description: text('description'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+  },
+  (table) => ({
+    receiptIdIdx: index('ReceiptItem_receiptId_idx').on(table.receiptId),
+    categoryIdx: index('ReceiptItem_category_idx').on(table.category),
+  }),
+);
+
+export type ReceiptItem = InferSelectModel<typeof receiptItem>;

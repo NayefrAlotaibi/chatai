@@ -27,8 +27,12 @@ import {
   type DBMessage,
   type Chat,
   stream,
+  receipt,
+  receiptItem,
+  type Receipt,
+  type ReceiptItem,
 } from './schema';
-import type { ArtifactKind } from '@/components/artifact';
+// Note: Do not import UI ArtifactKind here; DB Document.kind only allows 'text' | 'code' | 'image' | 'sheet'
 import { generateUUID } from '../utils';
 import { generateHashedPassword } from './utils';
 import type { VisibilityType } from '@/components/visibility-selector';
@@ -291,7 +295,8 @@ export async function saveDocument({
 }: {
   id: string;
   title: string;
-  kind: ArtifactKind;
+  // Restrict to DB-supported kinds only
+  kind: 'text' | 'code' | 'image' | 'sheet';
   content: string;
   userId: string;
 }) {
@@ -561,5 +566,241 @@ export async function getStreamIdsByChatId({ chatId }: { chatId: string }) {
       'bad_request:database',
       'Failed to get stream ids by chat id',
     );
+  }
+}
+
+// Receipt-related queries
+export async function saveReceipt({
+  userId,
+  merchantName,
+  merchantAddress,
+  receiptDate,
+  receiptTime,
+  receiptNumber,
+  subtotal,
+  tax,
+  tip,
+  total,
+  paymentMethod,
+  currency,
+  imageUrl,
+  originalImageUrl,
+}: {
+  userId: string;
+  merchantName: string;
+  merchantAddress?: string;
+  receiptDate: string;
+  receiptTime?: string;
+  receiptNumber?: string;
+  subtotal?: number;
+  tax?: number;
+  tip?: number;
+  total: number;
+  paymentMethod?: string;
+  currency?: string;
+  imageUrl?: string;
+  originalImageUrl?: string;
+}) {
+  try {
+    const [savedReceipt] = await db
+      .insert(receipt)
+      .values({
+        userId,
+        merchantName,
+        merchantAddress: merchantAddress || undefined,
+        receiptDate: receiptDate, // Ensure this is in YYYY-MM-DD format
+        receiptTime: receiptTime || undefined, // Handle empty strings
+        receiptNumber: receiptNumber || undefined,
+        subtotal: subtotal?.toString(),
+        tax: tax?.toString(),
+        tip: tip?.toString(),
+        total: total.toString(),
+        paymentMethod: paymentMethod || undefined,
+        currency: currency || 'USD',
+        imageUrl: imageUrl || undefined,
+        originalImageUrl: originalImageUrl || undefined,
+      })
+      .returning();
+
+    return savedReceipt;
+  } catch (error) {
+    console.error('Database error saving receipt:', error);
+    throw new ChatSDKError('bad_request:database', 'Failed to save receipt');
+  }
+}
+
+export async function saveReceiptItems({
+  receiptId,
+  items,
+}: {
+  receiptId: string;
+  items: Array<{
+    name: string;
+    quantity?: number;
+    unitPrice?: number;
+    totalPrice: number;
+    category?: string;
+    description?: string;
+  }>;
+}) {
+  try {
+    const savedItems = await db
+      .insert(receiptItem)
+      .values(
+        items.map((item) => ({
+          receiptId,
+          name: item.name,
+          quantity: item.quantity || 1,
+          unitPrice: item.unitPrice?.toString(),
+          totalPrice: item.totalPrice.toString(),
+          category: item.category,
+          description: item.description,
+        })),
+      )
+      .returning();
+
+    return savedItems;
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to save receipt items',
+    );
+  }
+}
+
+export async function getReceiptsByUserId({
+  userId,
+  limit = 50,
+  offset = 0,
+}: {
+  userId: string;
+  limit?: number;
+  offset?: number;
+}) {
+  try {
+    const receipts = await db
+      .select()
+      .from(receipt)
+      .where(eq(receipt.userId, userId))
+      .orderBy(desc(receipt.receiptDate), desc(receipt.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    return receipts;
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to get receipts by user id',
+    );
+  }
+}
+
+export async function getReceiptWithItems({ receiptId }: { receiptId: string }) {
+  try {
+    const [receiptData] = await db
+      .select()
+      .from(receipt)
+      .where(eq(receipt.id, receiptId));
+
+    if (!receiptData) {
+      return null;
+    }
+
+    const items = await db
+      .select()
+      .from(receiptItem)
+      .where(eq(receiptItem.receiptId, receiptId))
+      .orderBy(asc(receiptItem.createdAt));
+
+    return {
+      receipt: receiptData,
+      items,
+    };
+  } catch (error) {
+    throw new ChatSDKError(
+      'bad_request:database',
+      'Failed to get receipt with items',
+    );
+  }
+}
+
+export async function deleteReceipt({ receiptId }: { receiptId: string }) {
+  try {
+    // Items will be automatically deleted due to CASCADE
+    const [deletedReceipt] = await db
+      .delete(receipt)
+      .where(eq(receipt.id, receiptId))
+      .returning();
+
+    return deletedReceipt;
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to delete receipt');
+  }
+}
+
+// BankTransaction (raw SQL helpers — table managed in Supabase)
+export async function saveBankTransaction({
+  userId,
+  txnDate,
+  description,
+  debit,
+  credit,
+  amount,
+  balance,
+  currency,
+  reference,
+}: {
+  userId: string;
+  txnDate: string; // YYYY-MM-DD
+  description: string;
+  debit?: number;
+  credit?: number;
+  amount: number;
+  balance?: number;
+  currency?: string;
+  reference?: string;
+}) {
+  try {
+    // Use raw SQL since BankTransaction is not in our Drizzle schema
+    const query = `insert into public."BankTransaction" (
+      user_id, txn_date, description, debit, credit, amount, balance, currency, reference
+    ) values (
+      $1, $2::date, $3, $4::numeric, $5::numeric, $6::numeric, $7::numeric, $8, $9
+    ) returning *`;
+
+    const res = await (client as any).unsafe(query, [
+        userId,
+        txnDate,
+        description,
+        debit ?? null,
+        credit ?? null,
+        amount,
+        balance ?? null,
+        currency ?? 'USD',
+        reference ?? null,
+      ]);
+
+    // postgres.unsafe returns array of rows
+    // biome-ignore lint: any type
+    return (res as any)[0];
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to save bank transaction');
+  }
+}
+
+export async function getBankTransactionsByUserId({
+  userId,
+  limit = 200,
+}: {
+  userId: string;
+  limit?: number;
+}) {
+  try {
+    const query = `select * from public."BankTransaction" where user_id = $1 order by txn_date desc, created_at desc limit $2`;
+    const res = await (client as any).unsafe(query, [userId, limit]);
+    // biome-ignore lint: any
+    return res as any[];
+  } catch (error) {
+    throw new ChatSDKError('bad_request:database', 'Failed to get bank transactions');
   }
 }
