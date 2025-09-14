@@ -2,6 +2,7 @@ import { Artifact } from '@/components/create-artifact';
 import { CodeEditor } from '@/components/code-editor';
 import {
   CopyIcon,
+  FullscreenIcon,
   LogsIcon,
   MessageIcon,
   PlayIcon,
@@ -112,6 +113,16 @@ export const codeArtifact = new Artifact<'code', Metadata>({
     );
   },
   actions: [
+    {
+      icon: <FullscreenIcon size={18} />,
+      description: 'Open in full page',
+      onClick: ({ documentId }) => {
+        if (documentId && documentId !== 'init') {
+          const artifactUrl = `/artifact/${documentId}`;
+          window.open(artifactUrl, '_blank');
+        }
+      },
+    },
     {
       icon: <PlayIcon size={18} />,
       label: 'Run',

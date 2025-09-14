@@ -5,6 +5,7 @@ import { Editor } from '@/components/text-editor';
 import {
   ClockRewind,
   CopyIcon,
+  FullscreenIcon,
   MessageIcon,
   PenIcon,
   RedoIcon,
@@ -95,6 +96,16 @@ export const textArtifact = new Artifact<'text', TextArtifactMetadata>({
     );
   },
   actions: [
+    {
+      icon: <FullscreenIcon size={18} />,
+      description: 'Open in full page',
+      onClick: ({ documentId }) => {
+        if (documentId && documentId !== 'init') {
+          const artifactUrl = `/artifact/${documentId}`;
+          window.open(artifactUrl, '_blank');
+        }
+      },
+    },
     {
       icon: <ClockRewind size={18} />,
       description: 'View changes',

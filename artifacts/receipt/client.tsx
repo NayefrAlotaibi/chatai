@@ -1,5 +1,6 @@
 import { Artifact } from '@/components/create-artifact';
 import { Receipt } from '@/components/receipt';
+import { FullscreenIcon } from '@/components/icons';
 
 type ReceiptMetadata = {
   data?: any;
@@ -23,7 +24,18 @@ export const receiptArtifact = new Artifact<'receipt', ReceiptMetadata>({
   content: ({ metadata }) => {
     return <Receipt data={metadata?.data || {}} />;
   },
-  actions: [],
+  actions: [
+    {
+      icon: <FullscreenIcon size={18} />,
+      description: 'Open in full page',
+      onClick: ({ documentId }) => {
+        if (documentId && documentId !== 'init') {
+          const artifactUrl = `/artifact/${documentId}`;
+          window.open(artifactUrl, '_blank');
+        }
+      },
+    },
+  ],
   toolbar: [],
 });
 

@@ -1,6 +1,7 @@
 import { Artifact } from '@/components/create-artifact';
 import {
   CopyIcon,
+  FullscreenIcon,
   LineChartIcon,
   RedoIcon,
   SparklesIcon,
@@ -32,6 +33,8 @@ export const sheetArtifact = new Artifact<'sheet', Metadata>({
     isCurrentVersion,
     onSaveContent,
     status,
+    metadata,
+    setMetadata,
   }) => {
     return (
       <SpreadsheetEditor
@@ -40,10 +43,22 @@ export const sheetArtifact = new Artifact<'sheet', Metadata>({
         isCurrentVersion={isCurrentVersion}
         saveContent={onSaveContent}
         status={status}
+        metadata={metadata}
+        setMetadata={setMetadata}
       />
     );
   },
   actions: [
+    {
+      icon: <FullscreenIcon size={18} />,
+      description: 'Open in full page',
+      onClick: ({ documentId }) => {
+        if (documentId && documentId !== 'init') {
+          const artifactUrl = `/artifact/${documentId}`;
+          window.open(artifactUrl, '_blank');
+        }
+      },
+    },
     {
       icon: <UndoIcon size={18} />,
       description: 'View Previous version',

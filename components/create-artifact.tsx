@@ -13,6 +13,7 @@ export type ArtifactActionContext<M = any> = {
   mode: 'edit' | 'diff';
   metadata: M;
   setMetadata: Dispatch<SetStateAction<M>>;
+  documentId: string;
 };
 
 type ArtifactAction<M = any> = {

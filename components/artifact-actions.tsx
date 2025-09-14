@@ -43,6 +43,7 @@ function PureArtifactActions({
     mode,
     metadata,
     setMetadata,
+    documentId: artifact.documentId,
   };
 
   return (
