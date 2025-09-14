@@ -15,7 +15,6 @@ import {
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import {
   ArrowUpIcon,
   CopyIcon,
@@ -227,6 +226,10 @@ const PureSpreadsheetEditor = ({
       .replace(/-+/g, '-');
   }, []);
 
+  // File upload for dropdown per-column
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadTargetKey, setUploadTargetKey] = useState<string | null>(null);
+
   const withHeaderMenu = useMemo(() => {
     return columns.map((col) => {
       if (col.key === 'rowNumber') return col;
@@ -243,11 +246,86 @@ const PureSpreadsheetEditor = ({
                 <MoreHorizontalIcon size={14} />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem onClick={() => openAIConfig(col.key, String(col.name))}>
-                Configure AI…
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
+            <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
+              <div className="p-2 w-80">
+                <div className="mb-3">
+                  <div className="text-xs text-muted-foreground mb-1">Type</div>
+                  <div className="text-sm">Text</div>
+                </div>
+                <div className="mb-3">
+                  <div className="text-xs text-muted-foreground mb-1">Tool</div>
+                  <Select
+                    value={getColumnConfig(col.key).model}
+                    onValueChange={(val) =>
+                      setColumnConfig(col.key, { ...getColumnConfig(col.key), model: val })
+                    }
+                  >
+                    <SelectTrigger className="h-8">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {chatModels.map((m) => (
+                        <SelectItem key={m.id} value={m.id} className="text-sm">
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="mb-2">
+                  <div className="text-xs text-muted-foreground mb-1">Inputs</div>
+                  <Textarea
+                    placeholder="Format as: USD 10.00\nThe total amount is: {{E}}"
+                    value={getColumnConfig(col.key).prompt}
+                    onChange={(e) =>
+                      setColumnConfig(col.key, { ...getColumnConfig(col.key), prompt: e.target.value })
+                    }
+                    className="min-h-28 text-sm"
+                  />
+                </div>
+                <div className="flex items-center justify-between mb-2">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    onChange={async (e) => {
+                      const files = Array.from(e.target.files || []);
+                      if (!uploadTargetKey) return;
+                      const uploads = await Promise.all(files.map((f) => uploadFile(f)));
+                      const ok = uploads.filter(Boolean) as any[];
+                      setColumnConfig(uploadTargetKey, {
+                        ...getColumnConfig(uploadTargetKey),
+                        files: [...(getColumnConfig(uploadTargetKey).files ?? []), ...ok],
+                      });
+                      if (fileInputRef.current) fileInputRef.current.value = '';
+                    }}
+                  />
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setUploadTargetKey(col.key);
+                      fileInputRef.current?.click();
+                    }}
+                  >
+                    Upload files
+                  </Button>
+                  <Button size="sm" onClick={() => recomputeForColumn(col.key, true)}>
+                    Recompute all stale fields
+                  </Button>
+                </div>
+                {getColumnConfig(col.key).files?.length ? (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {getColumnConfig(col.key).files.map((f: any) => (
+                      <span key={f.url} className="text-[10px] rounded bg-muted px-2 py-0.5">
+                        {f.name || 'file'}
+                      </span>
+                    ))}
+                  </div>
+                ) : null}
+                <DropdownMenuSeparator />
+              </div>
               <DropdownMenuItem onClick={() => sortByColumn(col.key, 'asc')}>
                 <ArrowUpIcon />
                 Sort ascending
@@ -290,12 +368,6 @@ const PureSpreadsheetEditor = ({
     });
   }, [columns, sortByColumn, togglePinColumn, hideColumn, copyColumnInfo, deleteColumn]);
 
-  // AI Config Panel state
-  const [aiPanelOpen, setAiPanelOpen] = useState(false);
-  const [aiColumnKey, setAiColumnKey] = useState<string | null>(null);
-  const [aiColumnLabel, setAiColumnLabel] = useState<string>('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
   const getColumnConfig = useCallback(
     (key: string) => {
       const cfg = metadata?.columnConfigs?.[key] ?? {
@@ -318,12 +390,6 @@ const PureSpreadsheetEditor = ({
     [setMetadata],
   );
 
-  const openAIConfig = useCallback((key: string, label: string) => {
-    setAiColumnKey(key);
-    setAiColumnLabel(label);
-    setAiPanelOpen(true);
-  }, []);
-
   const uploadFile = useCallback(async (file: File) => {
     const formData = new FormData();
     formData.append('file', file);
@@ -338,12 +404,11 @@ const PureSpreadsheetEditor = ({
     }
   }, []);
 
-  const recomputeStale = useCallback(async () => {
-    if (!aiColumnKey) return;
-    const cfg = getColumnConfig(aiColumnKey);
+  const recomputeForColumn = useCallback(async (key: string, onlyStale: boolean) => {
+    const cfg = getColumnConfig(key);
     const indices = localRows
       .map((r, i) => ({ r, i }))
-      .filter(({ r }) => !String(r[aiColumnKey] ?? '').trim())
+      .filter(({ r }) => (onlyStale ? !String(r[key] ?? '').trim() : true))
       .map(({ i }) => i);
 
     if (indices.length === 0) {
@@ -362,7 +427,7 @@ const PureSpreadsheetEditor = ({
       body: JSON.stringify({
         model: cfg.model,
         prompt: cfg.prompt,
-        targetKey: aiColumnKey,
+        targetKey: key,
         files: cfg.files,
         rows: rowsToSend,
       }),
@@ -377,33 +442,33 @@ const PureSpreadsheetEditor = ({
     setLocalRows((prev) => {
       const next = [...prev];
       indices.forEach((idx, j) => {
-        next[idx] = { ...next[idx], [aiColumnKey]: updatedPartial[j][aiColumnKey] };
+        next[idx] = { ...next[idx], [key]: updatedPartial[j][key] };
       });
       saveFromRows(columns, next);
       return next;
     });
     toast.success('Recomputed');
-  }, [aiColumnKey, getColumnConfig, localRows, columns, saveFromRows]);
+  }, [getColumnConfig, localRows, columns, saveFromRows]);
 
   return (
     <>
-      <DataGrid
-        className={resolvedTheme === 'dark' ? 'rdg-dark' : 'rdg-light'}
+    <DataGrid
+      className={resolvedTheme === 'dark' ? 'rdg-dark' : 'rdg-light'}
         columns={withHeaderMenu}
-        rows={localRows}
-        enableVirtualization
-        onRowsChange={handleRowsChange}
-        onCellClick={(args) => {
-          if (args.column.key !== 'rowNumber') {
-            args.selectCell(true);
-          }
-        }}
-        style={{ height: '100%' }}
-        defaultColumnOptions={{
-          resizable: true,
-          sortable: true,
-        }}
-      />
+      rows={localRows}
+      enableVirtualization
+      onRowsChange={handleRowsChange}
+      onCellClick={(args) => {
+        if (args.column.key !== 'rowNumber') {
+          args.selectCell(true);
+        }
+      }}
+      style={{ height: '100%' }}
+      defaultColumnOptions={{
+        resizable: true,
+        sortable: true,
+      }}
+    />
 
       <Sheet open={aiPanelOpen} onOpenChange={setAiPanelOpen}>
         <SheetContent side="right" className="w-[420px]">
