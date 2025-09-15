@@ -43,7 +43,13 @@ export function ArtifactPage({ document }: ArtifactPageProps) {
     );
   }
 
-  const handleSaveContent = (updatedContent: string) => {
+  const handleSaveContent = (updatedContent: string, debounce?: boolean) => {
+    setContent(updatedContent);
+    // TODO: Implement auto-save functionality if needed
+  };
+
+  // For sheet editor which expects different signature
+  const handleSaveContentSheet = (updatedContent: string, isCurrentVersion: boolean) => {
     setContent(updatedContent);
     // TODO: Implement auto-save functionality if needed
   };
@@ -58,6 +64,14 @@ export function ArtifactPage({ document }: ArtifactPageProps) {
 
   // Use the same content rendering as the regular artifact
   const ArtifactContent = artifactDefinition.content;
+
+  // Debug logging
+  console.log('Artifact Page Debug:', {
+    kind: document.kind,
+    contentLength: content?.length || 0,
+    content: content?.substring(0, 100) + '...',
+    metadata
+  });
 
   return (
     <div className="flex h-screen flex-col bg-background">
@@ -75,22 +89,43 @@ export function ArtifactPage({ document }: ArtifactPageProps) {
       </div>
 
       {/* Content - Use the same rendering as regular artifacts */}
-      <div className="flex-1 overflow-hidden">
-        <ArtifactContent
-          title={document.title}
-          content={content}
-          mode="edit"
-          status="idle"
-          currentVersionIndex={0}
-          suggestions={[]}
-          onSaveContent={handleSaveContent}
-          isInline={false}
-          isCurrentVersion={true}
-          getDocumentContentById={() => content}
-          isLoading={false}
-          metadata={metadata}
-          setMetadata={setMetadata}
-        />
+      <div className="flex-1 overflow-hidden bg-background">
+        {document.kind === 'sheet' ? (
+          // Special handling for sheet to ensure proper props
+          <div className="h-full p-4">
+            <ArtifactContent
+              title={document.title}
+              content={content || 'A,B,C\n1,2,3\n4,5,6'}
+              mode="edit"
+              status="idle"
+              currentVersionIndex={0}
+              suggestions={[]}
+              saveContent={handleSaveContentSheet}
+              isInline={false}
+              isCurrentVersion={true}
+              getDocumentContentById={() => content}
+              isLoading={false}
+              metadata={metadata}
+              setMetadata={setMetadata}
+            />
+          </div>
+        ) : (
+          <ArtifactContent
+            title={document.title}
+            content={content}
+            mode="edit"
+            status="idle"
+            currentVersionIndex={0}
+            suggestions={[]}
+            onSaveContent={handleSaveContent}
+            isInline={false}
+            isCurrentVersion={true}
+            getDocumentContentById={() => content}
+            isLoading={false}
+            metadata={metadata}
+            setMetadata={setMetadata}
+          />
+        )}
       </div>
     </div>
   );

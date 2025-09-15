@@ -5,23 +5,11 @@ import DataGrid, { textEditor } from 'react-data-grid';
 import { parse, unparse } from 'papaparse';
 import { useTheme } from 'next-themes';
 import { cn } from '@/lib/utils';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import {
-  ArrowUpIcon,
-  CopyIcon,
-  EyeIcon,
-  MoreHorizontalIcon,
-  TrashIcon,
-} from '@/components/icons';
+import { ArrowUpIcon, CopyIcon, EyeIcon, MoreHorizontalIcon, TrashIcon } from '@/components/icons';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { chatModels } from '@/lib/ai/models';
 import { toast } from 'sonner';
 
@@ -49,25 +37,6 @@ const PureSpreadsheetEditor = ({
   setMetadata,
 }: SheetEditorProps) => {
   const { resolvedTheme } = useTheme();
-
-  const parseData = useMemo(() => {
-    if (!content) return Array(MIN_ROWS).fill(Array(MIN_COLS).fill(''));
-    const result = parse<string[]>(content, { skipEmptyLines: true });
-
-    const paddedData = result.data.map((row) => {
-      const paddedRow = [...row];
-      while (paddedRow.length < MIN_COLS) {
-        paddedRow.push('');
-      }
-      return paddedRow;
-    });
-
-    while (paddedData.length < MIN_ROWS) {
-      paddedData.push(Array(MIN_COLS).fill(''));
-    }
-
-    return paddedData;
-  }, [content]);
 
   const createBaseColumns = useCallback(() => {
     const rowNumberColumn = {
@@ -97,6 +66,78 @@ const PureSpreadsheetEditor = ({
   }, []);
 
   const [columns, setColumns] = useState<any[]>(createBaseColumns());
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [configColumnKey, setConfigColumnKey] = useState<string | null>(null);
+
+  const gridWrapperRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = gridWrapperRef.current;
+    if (!el) return;
+    if (isConfigOpen) {
+      el.setAttribute('inert', '');
+    } else {
+      el.removeAttribute('inert');
+    }
+  }, [isConfigOpen]);
+
+  const parseData = useMemo(() => {
+    if (!content) return Array(MIN_ROWS).fill(Array(MIN_COLS).fill(''));
+    const result = parse<string[]>(content, { skipEmptyLines: true });
+
+    const paddedData = result.data.map((row) => {
+      const paddedRow = [...row];
+      while (paddedRow.length < MIN_COLS) {
+        paddedRow.push('');
+      }
+      return paddedRow;
+    });
+
+    while (paddedData.length < MIN_ROWS) {
+      paddedData.push(Array(MIN_COLS).fill(''));
+    }
+
+    return paddedData;
+  }, [content]);
+
+  // Guard grid handlers while the config dropdown is open
+  useEffect(() => {
+    const stopKeysWhenOpen = (e: Event) => {
+      if (!isConfigOpen) return;
+      const target = e.target as HTMLElement | null;
+      const insideConfig = !!(target && target.closest && target.closest('[data-sheet-config]'));
+      if (insideConfig) {
+        // Allow typing/selecting inside config
+        return;
+      }
+      // Block grid/global shortcuts outside the config panel
+      e.stopPropagation();
+      if ((e as any).stopImmediatePropagation) {
+        (e as any).stopImmediatePropagation();
+      }
+      e.preventDefault();
+    };
+    const stopPointerInside = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (target && target.closest && target.closest('[data-sheet-config]')) {
+        e.stopPropagation();
+        if ((e as any).stopImmediatePropagation) {
+          (e as any).stopImmediatePropagation();
+        }
+      }
+    };
+    document.addEventListener('keydown', stopKeysWhenOpen, true);
+    document.addEventListener('keypress', stopKeysWhenOpen, true);
+    document.addEventListener('keyup', stopKeysWhenOpen, true);
+    document.addEventListener('mousedown', stopPointerInside, true);
+    document.addEventListener('pointerdown', stopPointerInside, true);
+    return () => {
+      document.removeEventListener('keydown', stopKeysWhenOpen, true);
+      document.removeEventListener('keypress', stopKeysWhenOpen, true);
+      document.removeEventListener('keyup', stopKeysWhenOpen, true);
+      document.removeEventListener('mousedown', stopPointerInside, true);
+      document.removeEventListener('pointerdown', stopPointerInside, true);
+    };
+  }, [isConfigOpen]);
 
   const initialRows = useMemo(() => {
     return parseData.map((row, rowIndex) => {
@@ -236,133 +277,18 @@ const PureSpreadsheetEditor = ({
       return {
         ...col,
         renderHeaderCell: () => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                className="flex items-center justify-between w-full px-1 py-0.5 rounded hover:bg-zinc-800/40"
-                aria-label={`Column ${col.name} menu`}
-              >
-                <span>{col.name}</span>
-                <MoreHorizontalIcon size={14} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" onCloseAutoFocus={(e) => e.preventDefault()}>
-              <div className="p-2 w-80">
-                <div className="mb-3">
-                  <div className="text-xs text-muted-foreground mb-1">Type</div>
-                  <div className="text-sm">Text</div>
-                </div>
-                <div className="mb-3">
-                  <div className="text-xs text-muted-foreground mb-1">Tool</div>
-                  <Select
-                    value={getColumnConfig(col.key).model}
-                    onValueChange={(val) =>
-                      setColumnConfig(col.key, { ...getColumnConfig(col.key), model: val })
-                    }
-                  >
-                    <SelectTrigger className="h-8">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {chatModels.map((m) => (
-                        <SelectItem key={m.id} value={m.id} className="text-sm">
-                          {m.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="mb-2">
-                  <div className="text-xs text-muted-foreground mb-1">Inputs</div>
-                  <Textarea
-                    placeholder="Format as: USD 10.00\nThe total amount is: {{E}}"
-                    value={getColumnConfig(col.key).prompt}
-                    onChange={(e) =>
-                      setColumnConfig(col.key, { ...getColumnConfig(col.key), prompt: e.target.value })
-                    }
-                    className="min-h-28 text-sm"
-                  />
-                </div>
-                <div className="flex items-center justify-between mb-2">
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    onChange={async (e) => {
-                      const files = Array.from(e.target.files || []);
-                      if (!uploadTargetKey) return;
-                      const uploads = await Promise.all(files.map((f) => uploadFile(f)));
-                      const ok = uploads.filter(Boolean) as any[];
-                      setColumnConfig(uploadTargetKey, {
-                        ...getColumnConfig(uploadTargetKey),
-                        files: [...(getColumnConfig(uploadTargetKey).files ?? []), ...ok],
-                      });
-                      if (fileInputRef.current) fileInputRef.current.value = '';
-                    }}
-                  />
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setUploadTargetKey(col.key);
-                      fileInputRef.current?.click();
-                    }}
-                  >
-                    Upload files
-                  </Button>
-                  <Button size="sm" onClick={() => recomputeForColumn(col.key, true)}>
-                    Recompute all stale fields
-                  </Button>
-                </div>
-                {getColumnConfig(col.key).files?.length ? (
-                  <div className="flex flex-wrap gap-1 mb-2">
-                    {getColumnConfig(col.key).files.map((f: any) => (
-                      <span key={f.url} className="text-[10px] rounded bg-muted px-2 py-0.5">
-                        {f.name || 'file'}
-                      </span>
-                    ))}
-                  </div>
-                ) : null}
-                <DropdownMenuSeparator />
-              </div>
-              <DropdownMenuItem onClick={() => sortByColumn(col.key, 'asc')}>
-                <ArrowUpIcon />
-                Sort ascending
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => sortByColumn(col.key, 'desc')}>
-                <ArrowUpIcon style={{ transform: 'rotate(180deg)' }} />
-                Sort descending
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => togglePinColumn(col.key)}>
-                {/* Using copy icon as placeholder for pin visual */}
-                <CopyIcon />
-                {col.frozen ? 'Unpin' : 'Pin'}
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => hideColumn(col.key)}>
-                <EyeIcon />
-                Hide from view
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => copyColumnInfo(String(col.key))}>
-                <CopyIcon />
-                Copy property ID
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => copyColumnInfo(slugify(String(col.name)))}>
-                <CopyIcon />
-                Copy property slug
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                onClick={() => deleteColumn(col.key)}
-                className="text-red-500"
-              >
-                <TrashIcon />
-                Delete Property
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            className="flex items-center justify-between w-full px-1 py-0.5 rounded hover:bg-zinc-800/40"
+            aria-label={`Column ${col.name} menu`}
+            onClick={(e) => {
+              e.stopPropagation();
+              setConfigColumnKey(col.key);
+              setIsConfigOpen(true);
+            }}
+          >
+            <span>{col.name}</span>
+            <MoreHorizontalIcon size={14} />
+          </button>
         ),
       };
     });
@@ -452,6 +378,7 @@ const PureSpreadsheetEditor = ({
 
   return (
     <>
+    <div ref={gridWrapperRef as any}></div>
     <DataGrid
       className={resolvedTheme === 'dark' ? 'rdg-dark' : 'rdg-light'}
         columns={withHeaderMenu}
@@ -460,6 +387,7 @@ const PureSpreadsheetEditor = ({
       onRowsChange={handleRowsChange}
       onCellClick={(args) => {
         if (args.column.key !== 'rowNumber') {
+          if (isConfigOpen) return; // ignore grid selection when config is open
           args.selectCell(true);
         }
       }}
@@ -470,90 +398,95 @@ const PureSpreadsheetEditor = ({
       }}
     />
 
-      <Sheet open={aiPanelOpen} onOpenChange={setAiPanelOpen}>
-        <SheetContent side="right" className="w-[420px]">
+      <Sheet open={isConfigOpen} onOpenChange={setIsConfigOpen}>
+        <SheetContent side="right" className="w-[400px]" data-sheet-config>
           <SheetHeader>
-            <SheetTitle>Configure AI for column {aiColumnLabel}</SheetTitle>
+            <SheetTitle>Column settings</SheetTitle>
+            <SheetDescription>
+              Configure AI actions for this column. These settings will apply to
+              all rows.
+            </SheetDescription>
           </SheetHeader>
-          {aiColumnKey && (
+          {configColumnKey && (
             <div className="mt-4 flex flex-col gap-3">
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Tool</label>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Type</div>
+                <div className="text-sm">Text</div>
+              </div>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Tool</div>
                 <Select
-                  value={getColumnConfig(aiColumnKey).model}
+                  value={getColumnConfig(configColumnKey).model}
                   onValueChange={(val) =>
-                    setColumnConfig(aiColumnKey, {
-                      ...getColumnConfig(aiColumnKey),
-                      model: val,
-                    })
+                    setColumnConfig(configColumnKey, { ...getColumnConfig(configColumnKey), model: val })
                   }
                 >
-                  <SelectTrigger className="w-full">
+                  <SelectTrigger className="h-8">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {chatModels.map((m) => (
-                      <SelectItem key={m.id} value={m.id}>
+                      <SelectItem key={m.id} value={m.id} className="text-sm">
                         {m.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Inputs</label>
+              <div>
+                <div className="text-xs text-muted-foreground mb-1">Inputs</div>
                 <Textarea
-                  placeholder="Provide the prompt. You can reference row fields like {{A}} or {{0}}"
-                  value={getColumnConfig(aiColumnKey).prompt}
-                  onChange={(e) =>
-                    setColumnConfig(aiColumnKey, {
-                      ...getColumnConfig(aiColumnKey),
-                      prompt: e.target.value,
-                    })
-                  }
-                  className="min-h-32"
+                  placeholder="Format as: USD 10.00\nThe total amount is: {{E}}"
+                  value={getColumnConfig(configColumnKey).prompt}
+                  onChange={(e) => {
+                    setColumnConfig(configColumnKey, { ...getColumnConfig(configColumnKey), prompt: e.target.value });
+                  }}
+                  className="min-h-28 text-sm"
+                  autoFocus
                 />
               </div>
-
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Upload files</label>
-                <div className="flex flex-col gap-2">
-                  <div className="flex flex-wrap gap-2">
-                    {getColumnConfig(aiColumnKey).files?.map((f: any) => (
-                      <span key={f.url} className="text-xs rounded bg-muted px-2 py-1">
-                        {f.name || 'file'}
-                      </span>
-                    ))}
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    className="hidden"
-                    multiple
-                    onChange={async (e) => {
-                      const files = Array.from(e.target.files || []);
-                      const uploads = await Promise.all(files.map((f) => uploadFile(f)));
-                      const ok = uploads.filter(Boolean) as any[];
-                      setColumnConfig(aiColumnKey, {
-                        ...getColumnConfig(aiColumnKey),
-                        files: [...(getColumnConfig(aiColumnKey).files ?? []), ...ok],
-                      });
-                      if (fileInputRef.current) fileInputRef.current.value = '';
-                    }}
-                  />
-                  <div>
-                    <Button variant="outline" onClick={() => fileInputRef.current?.click()}>
-                      Upload files
-                    </Button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="pt-2">
-                <Button onClick={recomputeStale} className="w-full">
+              <div className="flex items-center justify-between">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  className="hidden"
+                  multiple
+                  onChange={async (e) => {
+                    const files = Array.from(e.target.files || []);
+                    const uploads = await Promise.all(files.map((f) => uploadFile(f)));
+                    const ok = uploads.filter(Boolean) as any[];
+                    setColumnConfig(configColumnKey, {
+                      ...getColumnConfig(configColumnKey),
+                      files: [...(getColumnConfig(configColumnKey).files ?? []), ...ok],
+                    });
+                    if (fileInputRef.current) fileInputRef.current.value = '';
+                  }}
+                />
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                  Upload files
+                </Button>
+                <Button size="sm" onClick={() => void recomputeForColumn(configColumnKey, true)}>
                   Recompute all stale fields
                 </Button>
+              </div>
+              {getColumnConfig(configColumnKey).files?.length ? (
+                <div className="flex flex-wrap gap-1">
+                  {getColumnConfig(configColumnKey).files.map((f: any) => (
+                    <span key={f.url} className="text-[10px] rounded bg-muted px-2 py-0.5">
+                      {f.name || 'file'}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              <div className="my-1 h-px bg-muted" />
+              <div className="flex flex-col gap-1">
+                <Button variant="ghost" className="justify-start" onClick={() => sortByColumn(configColumnKey, 'asc')}><ArrowUpIcon /> Sort ascending</Button>
+                <Button variant="ghost" className="justify-start" onClick={() => sortByColumn(configColumnKey, 'desc')}><ArrowUpIcon style={{ transform: 'rotate(180deg)' }} /> Sort descending</Button>
+                <Button variant="ghost" className="justify-start" onClick={() => togglePinColumn(configColumnKey)}><CopyIcon /> Pin / Unpin</Button>
+                <Button variant="ghost" className="justify-start" onClick={() => hideColumn(configColumnKey)}><EyeIcon /> Hide from view</Button>
+                <Button variant="ghost" className="justify-start" onClick={() => copyColumnInfo(String(configColumnKey))}><CopyIcon /> Copy property ID</Button>
+                <Button variant="ghost" className="justify-start" onClick={() => copyColumnInfo(slugify(String(columns.find(c => c.key === configColumnKey)?.name ?? '')))}><CopyIcon /> Copy property slug</Button>
+                <Button variant="ghost" className="justify-start text-red-500" onClick={() => deleteColumn(configColumnKey)}><TrashIcon /> Delete Property</Button>
               </div>
             </div>
           )}
