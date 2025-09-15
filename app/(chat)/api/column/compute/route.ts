@@ -46,13 +46,14 @@ export async function POST(req: Request) {
     }
 
     try {
-      const { text } = await modelInstance.doGenerate({
+      const result = await modelInstance.doGenerate({
         inputFormat: 'messages',
         messages: [
           { role: 'system', content: 'Return only the final value for the target cell. No explanations.' },
           { role: 'user', content: parts },
         ],
       } as any);
+      const text = result.content?.[0]?.type === 'text' ? result.content[0].text : '';
       results.push(String(text ?? ''));
     } catch {
       results.push('');

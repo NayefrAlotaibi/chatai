@@ -100,7 +100,7 @@ export function ArtifactPage({ document }: ArtifactPageProps) {
               status="idle"
               currentVersionIndex={0}
               suggestions={[]}
-              saveContent={handleSaveContentSheet}
+              onSaveContent={handleSaveContentSheet}
               isInline={false}
               isCurrentVersion={true}
               getDocumentContentById={() => content}

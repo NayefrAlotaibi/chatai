@@ -45,7 +45,7 @@ export const categorizeTransaction = ({ session, dataStream }: CategorizeTransac
       let result: { category: string; confidence: number; rationale: string } | null = null;
       for await (const delta of fullStream) {
         if (delta.type === 'object') {
-          result = delta.object as typeof result extends infer T ? T : any;
+          result = delta.object as unknown as typeof result;
         }
       }
 

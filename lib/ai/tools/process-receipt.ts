@@ -99,7 +99,7 @@ export const processReceipt = ({ session, dataStream, imageUrl }: ProcessReceipt
 
             let transcript = '';
             for await (const delta of vision.fullStream) {
-              if (delta.type === 'text-delta') transcript += delta.textDelta;
+              if (delta.type === 'text-delta') transcript += delta.text;
             }
             ocrText = transcript.trim() || null;
           } catch (err) {

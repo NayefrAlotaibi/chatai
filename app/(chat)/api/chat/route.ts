@@ -222,7 +222,10 @@ export async function POST(request: Request) {
         if (latestImageUrl) {
           const wf = runWorkflow({ session, dataStream, defaultImageUrl: latestImageUrl });
           if (wf && wf.execute) {
-            void wf.execute({ name: 'receipt_enrichment', params: {} as any });
+            void wf.execute(
+              { name: 'receipt_enrichment', params: {} as any },
+              { toolCallId: 'auto-workflow', messages: [] }
+            );
           }
         }
       },
