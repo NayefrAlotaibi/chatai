@@ -221,7 +221,7 @@ export async function POST(request: Request) {
         // Minimal: auto-run the receipt enrichment workflow when an image is attached
         if (latestImageUrl) {
           const wf = runWorkflow({ session, dataStream, defaultImageUrl: latestImageUrl });
-          void wf.execute({ name: 'receipt_enrichment', params: {} as any });
+          void wf?.execute({ name: 'receipt_enrichment', params: {} as any });
         }
       },
       generateId: generateUUID,
